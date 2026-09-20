@@ -1,208 +1,525 @@
+from pathlib import Path
 
-
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import to_rgb
+from matplotlib.ticker import MultipleLocator
+from openpyxl import load_workbook
 
-file_path = '.\experiment3.xlsx'  # Excel 文件路径
-#sheet_name1 = 'hyper3'  # 需要读取的表格名称
 
-df = pd.read_excel(file_path, header=2)
+# ============================================================
+# 1. 文件路径
+# ============================================================
 
-# 提取数据
-value1, time1 = df.iloc[:, 0], df.iloc[:,1]
-value2, time2 = df.iloc[:, 2], df.iloc[:, 3]
+INPUT_FILE = Path("./experiment4.xlsx")
 
-value3, time3 = df.iloc[:, 4], df.iloc[:,5]
-value4, time4 = df.iloc[:, 6], df.iloc[:, 7]
 
-value5, time5 = df.iloc[:, 8], df.iloc[:,9]
-value6, time6 = df.iloc[:, 10], df.iloc[:,11]
+# ============================================================
+# 2. Excel中的数据范围
+# ============================================================
 
-value7, time7 = df.iloc[:, 12], df.iloc[:,13]
-value8, time8 = df.iloc[:, 14], df.iloc[:, 15]
+# 第2行到第91行，对应90个困难算例
+FIRST_DATA_ROW = 3
+LAST_DATA_ROW = 91
 
-# 创建图像
-plt.figure(1)
-fig, ax = plt.subplots(figsize=(10, 6), dpi=600)
 
-# 绘制曲线
-ax.plot(time1, value1, label="LDMA", linewidth=2.5, marker='o', markersize=6)
-ax.plot(time2, value2, label="LDMA6", linewidth=2.5, marker='s', markersize=5)
+# 一共10组数据
+# 从第3列开始，每隔3列读取一组：
+# 3, 6, 9, 12, ..., 30
+DATA_COLUMNS = list(range(4, 32, 3))
 
-# 设置刻度朝内
-ax.tick_params(axis="both", direction="in")
-plt.xticks(fontsize=15)
-plt.yticks(fontsize=15)
-plt.xlabel('Time (seconds)', fontsize=15)
-plt.ylabel('Objective value',  fontsize=15)
-for spine in ax.spines.values():
-    spine.set_linewidth(1.5)  # 设置边框线宽
 
-# **让 Matplotlib 自动设定刻度**
-plt.draw()  # 让 Matplotlib 计算刻度
+# 前3组用于第一个图
+CUSTOMER_LABELS = [
+    "Add",
+    "Swap",
+    "Remove",
+]
 
-# **获取 Matplotlib 真实的坐标范围**
-x_min, x_max = ax.get_xlim()  
-y_min, y_max = ax.get_ylim()
+CUSTOMER_COLUMNS = DATA_COLUMNS[:3]
 
-# **减少网格线数量**
-num_xgrid = 15  # X 方向网格线数量
-num_ygrid = 15  # Y 方向网格线数量
 
-x_grid_lines = np.linspace(x_min, x_max, num_xgrid)
-y_grid_lines = np.linspace(y_min, y_max, num_ygrid)
+# 后7组用于第二个图
+ROUTE_LABELS = [
+    "Relocate",
+    "2-opt",
+    "Swap",
+    "Node-arc swap",
+    "Arc-arc swap",
+    "2-opt*",
+    "Swap*",
+]
 
-# **使用更浅的颜色**
-light_gray =  "#D0D0D0"  # 更浅的灰色
+ROUTE_COLUMNS = DATA_COLUMNS[3:]
 
-# **只添加网格，不改变刻度**
-for x in x_grid_lines:
-    ax.axvline(x, color=light_gray, linestyle="--", linewidth=0.2)  # 竖直网格线
-for y in y_grid_lines:
-    ax.axhline(y, color=light_gray, linestyle="--", linewidth=0.2)  # 水平网格线
 
-# 添加图例
-ax.legend(loc="center right", prop={'size': 15})
+# ============================================================
+# 3. 颜色
+# ============================================================
 
-# 显示图像
-#plt.savefig('D:\\papers\\CTOP\\v1.0\\2setb32.eps', format='eps', dpi=1000, transparent=False)
-plt.show()
+CUSTOMER_COLOURS = [
+    "#5B8CCB",
+    "#65B779",
+    "#D97878",
+]
 
-plt.figure(2)
-fig, ax = plt.subplots(figsize=(10, 6), dpi=600)
+ROUTE_COLOURS = [
+    "#5B8CCB",
+    "#65B779",
+    "#D97878",
+    "#8D7CC3",
+    "#D5B85A",
+    "#64B8B3",
+    "#B678AF",
+]
 
-# 绘制曲线
-ax.plot(time3, value3, label="LDMA", linewidth=2.5, marker='o', markersize=6)
-ax.plot(time4, value4, label="LDMA6", linewidth=2.5, marker='s', markersize=5)
 
-# 设置刻度朝内
-ax.tick_params(axis="both", direction="in")
-plt.xticks(fontsize=15)
-plt.yticks(fontsize=15)
-plt.xlabel('Time (seconds)', fontsize=15)
-plt.ylabel('Objective value',  fontsize=15)
-for spine in ax.spines.values():
-    spine.set_linewidth(1.5)  # 设置边框线宽
+# ============================================================
+# 4. 绘图样式
+# ============================================================
 
-# **让 Matplotlib 自动设定刻度**
-plt.draw()  # 让 Matplotlib 计算刻度
+def configure_style():
+    plt.rcParams.update(
+        {
+            # Python窗口显示清晰度
+            "figure.dpi": 180,
 
-# **获取 Matplotlib 真实的坐标范围**
-x_min, x_max = ax.get_xlim()  
-y_min, y_max = ax.get_ylim()
+            # 保存图片的分辨率
+            "savefig.dpi": 1200,
 
-# **减少网格线数量**
-num_xgrid = 15  # X 方向网格线数量
-num_ygrid = 15  # Y 方向网格线数量
+            # 字体
+            "font.family": "serif",
+            "font.serif": [
+                "Times New Roman",
+                "Times",
+                "DejaVu Serif",
+            ],
+            "mathtext.fontset": "stix",
 
-x_grid_lines = np.linspace(x_min, x_max, num_xgrid)
-y_grid_lines = np.linspace(y_min, y_max, num_ygrid)
+            # 字号
+            "font.size": 14,
+            "axes.labelsize": 16,
+            "xtick.labelsize": 13,
+            "ytick.labelsize": 13,
+            "legend.fontsize": 13,
 
-# **使用更浅的颜色**
-light_gray =  "#D0D0D0"  # 更浅的灰色
+            "axes.linewidth": 1.1,
 
-# **只添加网格，不改变刻度**
-for x in x_grid_lines:
-    ax.axvline(x, color=light_gray, linestyle="--", linewidth=0.2)  # 竖直网格线
-for y in y_grid_lines:
-    ax.axhline(y, color=light_gray, linestyle="--", linewidth=0.2)  # 水平网格线
+            # EPS字体兼容设置
+            "ps.useafm": True,
+            "ps.fonttype": 3,
+            "text.usetex": False,
 
-# 添加图例
-ax.legend(loc="center right", prop={'size': 15})
+            # 防止负号无法显示
+            "axes.unicode_minus": False,
+        }
+    )
 
-# 显示图像
-#plt.savefig('D:\\papers\\CTOP\\v1.0\\2setb54.eps', format='eps', dpi=1000, transparent=False)
-plt.show()
 
-plt.figure(3)
-fig, ax = plt.subplots(figsize=(10, 6), dpi=600)
+# ============================================================
+# 5. 读取Excel数据
+# ============================================================
 
-# 绘制曲线
-ax.plot(time5, value5, label="LDMA", linewidth=2.5, marker='o', markersize=6)
-ax.plot(time6, value6, label="LDMA6", linewidth=2.5, marker='s', markersize=5)
+def read_runtime_differences(
+    worksheet,
+    labels,
+    columns
+):
+    results = {}
 
-# 设置刻度朝内
-ax.tick_params(axis="both", direction="in")
-plt.xticks(fontsize=15)
-plt.yticks(fontsize=15)
-plt.xlabel('Time (seconds)', fontsize=15)
-plt.ylabel('Objective value',  fontsize=15)
-for spine in ax.spines.values():
-    spine.set_linewidth(1.5)  # 设置边框线宽
+    for label, column in zip(labels, columns):
 
-# **让 Matplotlib 自动设定刻度**
-plt.draw()  # 让 Matplotlib 计算刻度
+        values = []
 
-# **获取 Matplotlib 真实的坐标范围**
-x_min, x_max = ax.get_xlim()  
-y_min, y_max = ax.get_ylim()
+        for row in range(
+            FIRST_DATA_ROW,
+            LAST_DATA_ROW + 1
+        ):
 
-# **减少网格线数量**
-num_xgrid = 15  # X 方向网格线数量
-num_ygrid = 15  # Y 方向网格线数量
+            value = worksheet.cell(
+                row=row,
+                column=column
+            ).value
 
-x_grid_lines = np.linspace(x_min, x_max, num_xgrid)
-y_grid_lines = np.linspace(y_min, y_max, num_ygrid)
+            if not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"Row {row}, column {column} "
+                    f"does not contain a valid number: {value!r}"
+                )
 
-# **使用更浅的颜色**
-light_gray =  "#D0D0D0"  # 更浅的灰色
+            if not np.isfinite(value):
+                raise ValueError(
+                    f"Row {row}, column {column} "
+                    f"contains a non-finite value: {value!r}"
+                )
 
-# **只添加网格，不改变刻度**
-for x in x_grid_lines:
-    ax.axvline(x, color=light_gray, linestyle="--", linewidth=0.2)  # 竖直网格线
-for y in y_grid_lines:
-    ax.axhline(y, color=light_gray, linestyle="--", linewidth=0.2)  # 水平网格线
+            values.append(float(value))
 
-# 添加图例
-ax.legend(loc="center right", prop={'size': 15})
+        results[label] = np.asarray(values)
 
-# 显示图像
-#plt.savefig('D:\\papers\\CTOP\\v1.0\\2setb90.eps', format='eps', dpi=1000, transparent=False)
-plt.show()
+    return results
 
-plt.figure(4)
-fig, ax = plt.subplots(figsize=(10, 6), dpi=600)
 
-# 绘制曲线
-ax.plot(time7, value7, label="LDMA", linewidth=2.5, marker='o', markersize=6)
-ax.plot(time8, value8, label="LDMA6", linewidth=2.5, marker='s', markersize=5)
+# ============================================================
+# 6. EPS不支持透明度，因此使用浅色模拟透明效果
+# ============================================================
 
-# 设置刻度朝内
-ax.tick_params(axis="both", direction="in")
-plt.xticks(fontsize=15)
-plt.yticks(fontsize=15)
-plt.xlabel('Time (seconds)', fontsize=15)
-plt.ylabel('Objective value',  fontsize=15)
-for spine in ax.spines.values():
-    spine.set_linewidth(1.5)  # 设置边框线宽
+def blend_with_white(colour, opacity):
 
-# **让 Matplotlib 自动设定刻度**
-plt.draw()  # 让 Matplotlib 计算刻度
+    rgb = np.asarray(
+        to_rgb(colour)
+    )
 
-# **获取 Matplotlib 真实的坐标范围**
-x_min, x_max = ax.get_xlim()  
-y_min, y_max = ax.get_ylim()
+    white = np.ones(3)
 
-# **减少网格线数量**
-num_xgrid = 15  # X 方向网格线数量
-num_ygrid = 15  # Y 方向网格线数量
+    return tuple(
+        opacity * rgb
+        + (1.0 - opacity) * white
+    )
 
-x_grid_lines = np.linspace(x_min, x_max, num_xgrid)
-y_grid_lines = np.linspace(y_min, y_max, num_ygrid)
 
-# **使用更浅的颜色**
-light_gray =  "#D0D0D0"  # 更浅的灰色
+# ============================================================
+# 7. 自动设置纵坐标范围
+# ============================================================
 
-# **只添加网格，不改变刻度**
-for x in x_grid_lines:
-    ax.axvline(x, color=light_gray, linestyle="--", linewidth=0.2)  # 竖直网格线
-for y in y_grid_lines:
-    ax.axhline(y, color=light_gray, linestyle="--", linewidth=0.2)  # 水平网格线
+def calculate_y_limits(values):
 
-# 添加图例
-ax.legend(loc="center right", prop={'size': 15})
+    all_values = np.concatenate(values)
 
-# 显示图像
-#plt.savefig('D:\\papers\\CTOP\\v1.0\\3setb30.eps', format='eps', dpi=1000, transparent=False)
-plt.show()
+    data_min = min(
+        float(all_values.min()),
+        0.0
+    )
+
+    data_max = max(
+        float(all_values.max()),
+        0.0
+    )
+
+    data_range = max(
+        data_max - data_min,
+        10.0
+    )
+
+    padding = 0.08 * data_range
+
+    lower = 5.0 * np.floor(
+        (data_min - padding) / 5.0
+    )
+
+    upper = 5.0 * np.ceil(
+        (data_max + padding) / 5.0
+    )
+
+    return lower, upper
+
+
+# ============================================================
+# 8. 绘制箱线图
+# ============================================================
+
+def draw_runtime_boxplot(
+    results,
+    colours
+):
+
+    labels = list(
+        results.keys()
+    )
+
+    values = [
+        results[label]
+        for label in labels
+    ]
+
+    positions = np.arange(
+        1,
+        len(labels) + 1
+    )
+
+    # 两张图使用相同尺寸
+    fig, ax = plt.subplots(
+        figsize=(10.0, 6.0),
+        dpi=180
+    )
+
+    boxplot = ax.boxplot(
+        values,
+        positions=positions,
+        widths=0.58,
+        patch_artist=True,
+        showfliers=False,
+
+        medianprops={
+            "color": "black",
+            "linewidth": 1.8,
+        },
+
+        whiskerprops={
+            "color": "#555555",
+            "linewidth": 1.3,
+        },
+
+        capprops={
+            "color": "#555555",
+            "linewidth": 1.3,
+        },
+
+        boxprops={
+            "edgecolor": "#3F3F3F",
+            "linewidth": 1.4,
+        },
+    )
+
+    # --------------------------------------------------------
+    # 箱体颜色
+    # --------------------------------------------------------
+
+    for patch, colour in zip(
+        boxplot["boxes"],
+        colours,
+    ):
+
+        patch.set_facecolor(
+            blend_with_white(
+                colour,
+                opacity=0.68,
+            )
+        )
+
+        patch.set_alpha(1.0)
+
+
+    # --------------------------------------------------------
+    # 固定随机种子
+    # --------------------------------------------------------
+
+    rng = np.random.default_rng(
+        2026
+    )
+
+
+    # --------------------------------------------------------
+    # 绘制散点
+    # --------------------------------------------------------
+
+    for position, data, colour in zip(
+        positions,
+        values,
+        colours,
+    ):
+
+        jitter = rng.uniform(
+            -0.105,
+            0.105,
+            size=len(data),
+        )
+
+        ax.scatter(
+            position + jitter,
+            data,
+            s=25,
+
+            color=blend_with_white(
+                colour,
+                opacity=0.42,
+            ),
+
+            alpha=1.0,
+            edgecolors="none",
+            zorder=3,
+        )
+
+
+    # --------------------------------------------------------
+    # LDMA基准线
+    # --------------------------------------------------------
+
+    ax.axhline(
+        y=0.0,
+        color="#3F3F3F",
+        linestyle="--",
+        linewidth=1.3,
+        label="LDMA baseline",
+        zorder=2,
+    )
+
+
+    # --------------------------------------------------------
+    # 自动设置纵坐标范围
+    # --------------------------------------------------------
+
+    lower, upper = calculate_y_limits(
+        values
+    )
+
+    ax.set_ylim(
+        lower,
+        upper,
+    )
+
+
+    # 第一张图范围较大时用50间隔
+    # 第二张图范围较小时用5间隔
+    if upper - lower > 150:
+        tick_interval = 50
+    else:
+        tick_interval = 5
+
+    ax.yaxis.set_major_locator(
+        MultipleLocator(
+            tick_interval
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # 纵坐标名称
+    # --------------------------------------------------------
+
+    ax.set_ylabel(
+        "Runtime difference relative to LDMA (%)"
+    )
+
+
+    # --------------------------------------------------------
+    # 横坐标
+    # --------------------------------------------------------
+
+    ax.set_xticks(
+        positions
+    )
+
+    ax.set_xticklabels(
+        labels,
+        rotation=12,
+        ha="right",
+    )
+
+
+    # --------------------------------------------------------
+    # 网格线
+    # --------------------------------------------------------
+
+    ax.grid(
+        axis="y",
+        color="#D9D9D9",
+        linestyle="--",
+        linewidth=0.7,
+        alpha=1.0,
+    )
+
+    ax.set_axisbelow(
+        True
+    )
+
+
+    # --------------------------------------------------------
+    # 图例
+    # --------------------------------------------------------
+
+    ax.legend(
+        loc="upper right",
+        frameon=False,
+    )
+
+
+    # --------------------------------------------------------
+    # 两张图使用相同边距
+    # --------------------------------------------------------
+
+    fig.subplots_adjust(
+        left=0.13,
+        right=0.98,
+        bottom=0.24,
+        top=0.96,
+    )
+
+
+# ============================================================
+# 9. 主程序
+# ============================================================
+
+def main():
+
+    configure_style()
+
+    # --------------------------------------------------------
+    # 检查Excel文件是否存在
+    # --------------------------------------------------------
+
+    if not INPUT_FILE.exists():
+
+        raise FileNotFoundError(
+            f"Excel file not found: "
+            f"{INPUT_FILE}"
+        )
+
+
+    # --------------------------------------------------------
+    # 打开Excel
+    # --------------------------------------------------------
+
+    workbook = load_workbook(
+        INPUT_FILE,
+        data_only=True,
+        read_only=True,
+    )
+
+    worksheet = workbook[
+        "Sheet1"
+    ]
+
+
+    # --------------------------------------------------------
+    # 第一个图
+    # 读取第3、6、9列
+    # --------------------------------------------------------
+
+    customer_results = (
+        read_runtime_differences(
+            worksheet,
+            CUSTOMER_LABELS,
+            CUSTOMER_COLUMNS,
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # 第二个图
+    # 读取第12、15、18、21、24、27、30列
+    # --------------------------------------------------------
+
+    route_results = (
+        read_runtime_differences(
+            worksheet,
+            ROUTE_LABELS,
+            ROUTE_COLUMNS,
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # 绘制两个图
+    # --------------------------------------------------------
+
+    draw_runtime_boxplot(
+        customer_results,
+        CUSTOMER_COLOURS,
+    )
+
+    draw_runtime_boxplot(
+        route_results,
+        ROUTE_COLOURS,
+    )
+
+
+    # --------------------------------------------------------
+    # 同时显示两个图
+    # --------------------------------------------------------
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
